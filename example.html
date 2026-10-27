@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Module Usage Example</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -109,7 +110,7 @@
             const result = window.taxCalculator.calculateTaxes({
                 income: 75000,
                 adjustments: 0,
-                deductions: 29200, // Standard deduction for married
+                deductions: 31500, // Standard deduction for married (tax year 2025)
                 credits: 2000,
                 filingStatus: 2
             });
@@ -141,7 +142,7 @@
             const standardResult = window.taxCalculator.calculateTaxes({
                 income: 100000,
                 adjustments: 0,
-                deductions: 29200,
+                deductions: 31500,
                 credits: 0,
                 filingStatus: 2
             });
@@ -149,7 +150,7 @@
             const customResult = window.customCalculator.calculateTaxes({
                 income: 100000,
                 adjustments: 0,
-                deductions: 29200,
+                deductions: 31500,
                 credits: 0,
                 filingStatus: 2
             });

@@ -3,6 +3,23 @@
  * Replacing Tailwind CDN with local styles optimized for mobile devices
  */
 
+/* Theme tokens: text and focus colours that differ per theme (light values here, dark values under .dark) */
+:root {
+    --focus-ring: #4f46e5; /* indigo-600 - 6.3:1 on white */
+    --text-federal: #2563eb; /* blue-600 */
+    --text-state: #15803d; /* green-700 */
+    --text-county: #9333ea; /* purple-600 */
+    --text-take-home: #047857; /* emerald-700 */
+}
+
+.dark {
+    --focus-ring: #a5b4fc; /* indigo-300 - 7.3:1 on slate-800 */
+    --text-federal: #60a5fa; /* blue-400 */
+    --text-state: #4ade80; /* green-400 */
+    --text-county: #c084fc; /* purple-400 */
+    --text-take-home: #10b981; /* emerald-500 */
+}
+
 /* Reset and base styles */
 * {
     box-sizing: border-box;
@@ -11,7 +28,7 @@
 }
 
 html {
-    font-size: 16px; /* Base font size for mobile */
+    font-size: 100%; /* Follow the browser's default text size (16px unless the user changed it) */
 }
 
 body {
@@ -21,15 +38,15 @@ body {
     background-color: #f8fafc; /* slate-50 */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
 }
 
 /* Container */
 .container {
     width: 100%;
-    max-width: 672px; /* max-w-2xl */
+    max-width: 42rem; /* max-w-2xl (672px at the default text size) */
     margin: 0 auto;
     padding: 1rem; /* p-4 */
+    container-type: inline-size; /* the tab strip and the header pick their layout from this width */
 }
 
 /* Header */
@@ -65,11 +82,59 @@ body {
     font-weight: 700;
     color: #0f172a; /* slate-900 */
     margin-bottom: 0.5rem;
+    padding: 0 2.75rem; /* keep the title clear of the theme toggle (2.25rem wide, top right) */
+    overflow-wrap: anywhere; /* break a word rather than run under the toggle at huge text sizes */
 }
 
 .subtitle {
-    color: #64748b; /* slate-600 */
+    color: #475569; /* slate-600 */
     font-size: 1rem;
+}
+
+.subtitle + .subtitle {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Theme toggle icon follows the theme (moon in light mode, sun in dark mode), so it is right from first paint */
+#theme-toggle-light-icon {
+    display: none;
+}
+
+.dark #theme-toggle-light-icon {
+    display: block;
+}
+
+.dark #theme-toggle-dark-icon {
+    display: none;
+}
+
+/* Shown by a script at the end of index.html when the calculator did not start */
+.app-error {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border: 2px solid #b91c1c; /* red-700 */
+    border-radius: 0.5rem;
+    background-color: #fef2f2; /* red-50 */
+    color: #7f1d1d; /* red-900 */
+    font-size: 0.875rem;
+}
+
+.dark .app-error {
+    border-color: #fca5a5; /* red-300 */
+    background-color: #450a0a; /* red-950 */
+    color: #fecaca; /* red-200 */
+}
+
+/* Too narrow for the title beside the toggle (very large zoom): give the toggle a row of its own */
+@container (max-width: 12rem) {
+    .header {
+        padding-top: 2.75rem;
+    }
+
+    .main-title {
+        padding: 0;
+    }
 }
 
 /* Main content area */
@@ -123,7 +188,7 @@ body {
     border-radius: 0.5rem;
     cursor: pointer;
     background-color: #f1f5f9; /* slate-100 */
-    color: #64748b; /* slate-600 */
+    color: #475569; /* slate-600 */
     transition: all 0.2s;
     border: 2px solid transparent;
     font-weight: 500;
@@ -137,6 +202,44 @@ body {
     background-color: #4f46e5; /* indigo-600 */
     color: white;
     border-color: #4f46e5;
+}
+
+/* County dropdown */
+.select-input {
+    width: 100%;
+    padding: 0.75rem 0.5rem;
+    background-color: white;
+    border: 1px solid #d1d5db; /* slate-300 */
+    border-radius: 0.375rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    color: #1e293b; /* slate-800 */
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+    min-height: 48px; /* Touch target size */
+    text-overflow: ellipsis; /* long "County — rate" entries on narrow phones */
+}
+
+.select-input:focus {
+    outline: none;
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
+}
+
+.county-info {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: #475569; /* slate-600 */
+}
+
+.bracket-note {
+    margin: -0.5rem 0 1rem; /* sits under the table heading */
+    font-size: 0.8125rem;
+    color: #475569; /* slate-600 */
+}
+
+.intro-text {
+    color: #475569; /* slate-600 */
 }
 
 /* Tax sections */
@@ -186,7 +289,7 @@ body {
 /* Sliders */
 .slider {
     flex: 1;
-    min-width: 200px;
+    min-width: min(200px, 100%);
     height: 8px;
     border-radius: 4px;
     background-color: #e2e8f0; /* slate-200 */
@@ -234,8 +337,8 @@ body {
 
 .number-input:focus {
     outline: none;
-    border-color: #4f46e5; /* indigo-500 */
-    box-shadow: 0 0 0 1px #4f46e5;
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
 }
 
 /* Hide number input spinners */
@@ -261,7 +364,7 @@ body {
 
 .display-label {
     font-size: 0.875rem;
-    color: #d97706; /* amber-600 */
+    color: #92400e; /* amber-800 */
     margin-bottom: 0.25rem;
 }
 
@@ -297,12 +400,12 @@ body {
     flex-direction: column;
     align-items: center;
     flex: 1;
-    min-width: 100px;
+    min-width: 6.25rem;
 }
 
 .percentage-label {
     font-size: 0.75rem;
-    color: #64748b; /* slate-600 */
+    color: #475569; /* slate-600 */
     margin-bottom: 0.25rem;
     text-align: center;
     font-weight: 500;
@@ -316,7 +419,7 @@ body {
 
 /* Color coding for percentage values */
 .percentage-item:nth-child(1) .percentage-value {
-    color: #059669; /* emerald-600 - Take-Home */
+    color: #047857; /* emerald-700 - Take-Home */
 }
 
 .percentage-item:nth-child(2) .percentage-value {
@@ -324,7 +427,7 @@ body {
 }
 
 .percentage-item:nth-child(3) .percentage-value {
-    color: #ca8a04; /* yellow-600 - State Tax */
+    color: #a16207; /* yellow-700 - State Tax */
 }
 
 .percentage-item:nth-child(4) .percentage-value {
@@ -392,6 +495,7 @@ body {
 /* Summary sections */
 .summary-grid {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
     margin-bottom: 2rem;
 }
@@ -420,6 +524,7 @@ body {
 
 .summary-row {
     display: flex;
+    flex-wrap: wrap; /* a long value drops below its label instead of overflowing at large text sizes */
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.5rem;
@@ -428,13 +533,14 @@ body {
 
 .summary-label {
     font-size: 0.875rem;
-    color: #64748b; /* slate-600 */
+    color: #475569; /* slate-600 */
     flex: 1;
 }
 
 .summary-value {
     font-weight: 600;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 .summary-divider {
@@ -443,17 +549,26 @@ body {
     margin-top: 0.5rem;
 }
 
+.federal-summary .summary-divider {
+    border-color: #bfdbfe; /* blue-200 */
+}
+
+.state-summary .summary-divider {
+    border-color: #bbf7d0; /* green-200 */
+}
+
 /* Total summary */
 .total-summary {
     background-color: #f1f5f9; /* slate-100 */
     padding: 1.5rem;
     border-radius: 0.75rem;
     border: 2px solid #cbd5e1; /* slate-300 */
+    container-type: inline-size; /* the grids below pick their column count from this width */
 }
 
 .total-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     text-align: center;
     margin-bottom: 1rem;
@@ -465,7 +580,7 @@ body {
 
 .total-label {
     font-size: 0.875rem;
-    color: #64748b;
+    color: #475569; /* slate-600 */
     margin-bottom: 0.25rem;
 }
 
@@ -478,7 +593,7 @@ body {
     border-top: 1px solid #cbd5e1;
     padding-top: 1rem;
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     text-align: center;
 }
@@ -489,6 +604,7 @@ body {
 
 .total-main-value {
     font-size: 1.5rem;
+    font-size: clamp(1.125rem, 12cqw, 1.5rem); /* shrinks only when the card is narrow for the text size (very large text) */
     font-weight: 700;
 }
 
@@ -528,46 +644,52 @@ body {
     background-color: white;
     border-radius: 0.5rem;
     border: 1px solid #e2e8f0;
+    container-type: inline-size; /* the equation below picks its layout from this width */
 }
 
+/* One equation (box, operator, box, operator, box). On narrow cards it is stacked like written
+   arithmetic: first box on top, then each operator beside the box it applies to. */
 .calc-step-mobile {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
     gap: 0.5rem;
     align-items: center;
-    justify-content: center;
-    min-height: 80px;
+    max-width: 20rem;
+    margin: 0 auto;
+}
+
+.calc-step-mobile > :first-child {
+    grid-column: 2;
 }
 
 .calc-box {
     background-color: #f1f5f9; /* slate-200 */
-    padding: 0.75rem 0.5rem;
+    padding: 0.5rem 0.25rem;
     border-radius: 0.5rem;
     text-align: center;
-    min-width: 80px;
-    flex: 1 1 auto;
-    max-width: 140px;
 }
 
 .calc-box-label {
     font-size: 0.75rem;
-    color: #64748b;
+    color: #475569; /* slate-600 */
     margin-bottom: 0.25rem;
+    overflow-wrap: anywhere;
 }
 
 .calc-box-value {
     font-weight: 600;
     color: #0f172a;
-    font-size: 1rem;
+    font-size: 0.875rem;
 }
 
 .calc-operator {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #64748b;
-    margin: 0.5rem 0;
-    flex: 0 0 auto;
+    color: #475569; /* slate-600 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch; /* as tall as its row, symbol centered: it sits at the top of the same row as the box it precedes */
     white-space: nowrap;
 }
 
@@ -576,11 +698,11 @@ body {
 }
 
 .calc-result .calc-box-label {
-    color: #d97706; /* amber-700 */
+    color: #92400e; /* amber-800 */
 }
 
 .calc-result .calc-box-value {
-    color: #92400e; /* amber-900 */
+    color: #92400e; /* amber-800 */
 }
 
 /* Unique colors for each calculation element type */
@@ -590,11 +712,11 @@ body {
 }
 
 .calc-gross-income .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-gross-income .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-adjustments {
@@ -603,11 +725,11 @@ body {
 }
 
 .calc-adjustments .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-adjustments .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-deductions {
@@ -616,11 +738,11 @@ body {
 }
 
 .calc-deductions .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-deductions .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-tax-rate {
@@ -629,11 +751,11 @@ body {
 }
 
 .calc-tax-rate .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-tax-rate .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-pre-credit-tax {
@@ -642,11 +764,11 @@ body {
 }
 
 .calc-pre-credit-tax .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-pre-credit-tax .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-credits {
@@ -655,11 +777,11 @@ body {
 }
 
 .calc-credits .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-credits .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-total-tax {
@@ -668,11 +790,11 @@ body {
 }
 
 .calc-total-tax .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-total-tax .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-take-home {
@@ -681,11 +803,11 @@ body {
 }
 
 .calc-take-home .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-take-home .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .calc-effective-rate {
@@ -694,90 +816,90 @@ body {
 }
 
 .calc-effective-rate .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .calc-effective-rate .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
-/* Maryland-specific classes */
-.calc-maryland-state-tax-rate {
+/* State-specific classes */
+.calc-state-tax-rate {
     background-color: #FFF9D6 !important; /* Maryland State Tax Rate - Light */
     border: 2px solid #FACC15; /* Yellow border */
 }
 
-.calc-maryland-state-tax-rate .calc-box-label {
-    color: #FACC15 !important; /* Yellow */
+.calc-state-tax-rate .calc-box-label {
+    color: #854d0e; /* Yellow-800 */
 }
 
-.calc-maryland-state-tax-rate .calc-box-value {
-    color: #ca8a04 !important; /* Yellow-700 */
+.calc-state-tax-rate .calc-box-value {
+    color: #713f12; /* Yellow-900 */
 }
 
-.calc-maryland-state-tax-before-credits {
+.calc-state-tax-before-credits {
     background-color: #FFF1C9 !important; /* Maryland State Tax Before Credits - Light */
     border: 2px solid #FACC15; /* Yellow border */
 }
 
-.calc-maryland-state-tax-before-credits .calc-box-label {
-    color: #FACC15 !important; /* Yellow */
+.calc-state-tax-before-credits .calc-box-label {
+    color: #854d0e; /* Yellow-800 */
 }
 
-.calc-maryland-state-tax-before-credits .calc-box-value {
-    color: #ca8a04 !important; /* Yellow-700 */
+.calc-state-tax-before-credits .calc-box-value {
+    color: #713f12; /* Yellow-900 */
 }
 
-.calc-maryland-total-state-tax {
+.calc-total-state-tax {
     background-color: #FFE4B8 !important; /* Total Maryland State Tax - Light */
     border: 2px solid #FACC15; /* Yellow border */
 }
 
-.calc-maryland-total-state-tax .calc-box-label {
-    color: #FACC15 !important; /* Yellow */
+.calc-total-state-tax .calc-box-label {
+    color: #854d0e; /* Yellow-800 */
 }
 
-.calc-maryland-total-state-tax .calc-box-value {
-    color: #ca8a04 !important; /* Yellow-700 */
+.calc-total-state-tax .calc-box-value {
+    color: #713f12; /* Yellow-900 */
 }
 
-.calc-anne-arundel-county-tax {
+.calc-county-tax {
     background-color: #F3D6FF !important; /* Anne Arundel County Tax - Light */
     border: 2px solid #A855F7; /* Purple border */
 }
 
-.calc-anne-arundel-county-tax .calc-box-label {
-    color: #A855F7 !important; /* Purple */
+.calc-county-tax .calc-box-label {
+    color: #7e22ce; /* Purple-700 */
 }
 
-.calc-anne-arundel-county-tax .calc-box-value {
-    color: #7c3aed !important; /* Purple-700 */
+.calc-county-tax .calc-box-value {
+    color: #6b21a8; /* Purple-800 */
 }
 
-.calc-anne-arundel-county-tax-rate {
+.calc-county-tax-rate {
     background-color: #E7E0FF !important; /* Anne Arundel County Tax Rate - Light */
     border: 2px solid #A855F7; /* Purple border */
 }
 
-.calc-anne-arundel-county-tax-rate .calc-box-label {
-    color: #A855F7 !important; /* Purple */
+.calc-county-tax-rate .calc-box-label {
+    color: #7e22ce; /* Purple-700 */
 }
 
-.calc-anne-arundel-county-tax-rate .calc-box-value {
-    color: #7c3aed !important; /* Purple-700 */
+.calc-county-tax-rate .calc-box-value {
+    color: #6b21a8; /* Purple-800 */
 }
 
-.calc-combined-maryland-tax {
+.calc-combined-state-tax {
     background-color: #FFD6F1 !important; /* Combined Maryland Tax - Light */
     border: 2px solid #A855F7; /* Purple border */
 }
 
-.calc-combined-maryland-tax .calc-box-label {
-    color: #A855F7 !important; /* Purple */
+.calc-combined-state-tax .calc-box-label {
+    color: #7e22ce; /* Purple-700 */
 }
 
-.calc-combined-maryland-tax .calc-box-value {
-    color: #7c3aed !important; /* Purple-700 */
+.calc-combined-state-tax .calc-box-value {
+    color: #6b21a8; /* Purple-800 */
 }
 
 /* Concept classes for AGI and Taxable Income */
@@ -787,11 +909,11 @@ body {
 }
 
 .concept-agi .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .concept-agi .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 .concept-taxable-income {
@@ -800,11 +922,11 @@ body {
 }
 
 .concept-taxable-income .calc-box-label {
-    color: #3B82F6 !important; /* Blue */
+    color: #1d4ed8; /* Blue-700 */
 }
 
 .concept-taxable-income .calc-box-value {
-    color: #1e40af !important; /* Blue-700 */
+    color: #1e40af; /* Blue-800 */
 }
 
 /* Dark mode support */
@@ -863,6 +985,24 @@ body {
     border-color: #4f46e5;
 }
 
+.dark .select-input {
+    background-color: #374151; /* slate-700 */
+    border-color: #4b5563; /* slate-600 */
+    color: #f1f5f9; /* slate-100 - brighter text */
+}
+
+.dark .select-input:focus {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
+}
+
+.dark .county-info,
+.dark .bracket-note,
+.dark .intro-text,
+.dark .scroll-hint {
+    color: #94a3b8; /* slate-400 */
+}
+
 .dark .number-input {
     background-color: #374151; /* slate-700 */
     border-color: #4b5563; /* slate-600 */
@@ -870,8 +1010,8 @@ body {
 }
 
 .dark .number-input:focus {
-    border-color: #6366f1; /* indigo-500 */
-    box-shadow: 0 0 0 1px #6366f1;
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
 }
 
 .dark .slider {
@@ -944,6 +1084,14 @@ body {
     border-color: #22c55e; /* green-500 */
 }
 
+.dark .federal-summary .summary-divider {
+    border-color: #3b82f6; /* blue-500 */
+}
+
+.dark .state-summary .summary-divider {
+    border-color: #22c55e; /* green-500 */
+}
+
 .dark .summary-label {
     color: #cbd5e1; /* slate-300 - slightly brighter than before */
 }
@@ -1000,7 +1148,7 @@ body {
 }
 
 .dark .percentage-item:nth-child(4) .percentage-value {
-    color: #a855f7; /* purple-500 - County Tax */
+    color: #c084fc; /* purple-400 - County Tax */
 }
 
 .dark .legend {
@@ -1157,82 +1305,82 @@ body {
     color: #93C5FD !important; /* Blue-300 for dark mode */
 }
 
-/* Dark mode styles for Maryland-specific classes */
-.dark .calc-maryland-state-tax-rate {
+/* Dark mode styles for State-specific classes */
+.dark .calc-state-tax-rate {
     background-color: #3A3517 !important; /* Maryland State Tax Rate - Dark */
     border-color: #FDE047 !important; /* Yellow border for dark mode */
 }
 
-.dark .calc-maryland-state-tax-rate .calc-box-label {
+.dark .calc-state-tax-rate .calc-box-label {
     color: #FDE047 !important; /* Yellow for dark mode */
 }
 
-.dark .calc-maryland-state-tax-rate .calc-box-value {
+.dark .calc-state-tax-rate .calc-box-value {
     color: #FEF08A !important; /* Yellow-200 for dark mode */
 }
 
-.dark .calc-maryland-state-tax-before-credits {
+.dark .calc-state-tax-before-credits {
     background-color: #3F3313 !important; /* Maryland State Tax Before Credits - Dark */
     border-color: #FDE047 !important; /* Yellow border for dark mode */
 }
 
-.dark .calc-maryland-state-tax-before-credits .calc-box-label {
+.dark .calc-state-tax-before-credits .calc-box-label {
     color: #FDE047 !important; /* Yellow for dark mode */
 }
 
-.dark .calc-maryland-state-tax-before-credits .calc-box-value {
+.dark .calc-state-tax-before-credits .calc-box-value {
     color: #FEF08A !important; /* Yellow-200 for dark mode */
 }
 
-.dark .calc-maryland-total-state-tax {
+.dark .calc-total-state-tax {
     background-color: #3E2A10 !important; /* Total Maryland State Tax - Dark */
     border-color: #FDE047 !important; /* Yellow border for dark mode */
 }
 
-.dark .calc-maryland-total-state-tax .calc-box-label {
+.dark .calc-total-state-tax .calc-box-label {
     color: #FDE047 !important; /* Yellow for dark mode */
 }
 
-.dark .calc-maryland-total-state-tax .calc-box-value {
+.dark .calc-total-state-tax .calc-box-value {
     color: #FEF08A !important; /* Yellow-200 for dark mode */
 }
 
-.dark .calc-anne-arundel-county-tax {
+.dark .calc-county-tax {
     background-color: #3F2163 !important; /* Anne Arundel County Tax - Dark */
     border-color: #C084FC !important; /* Purple border for dark mode */
 }
 
-.dark .calc-anne-arundel-county-tax .calc-box-label {
+.dark .calc-county-tax .calc-box-label {
     color: #C084FC !important; /* Purple for dark mode */
 }
 
-.dark .calc-anne-arundel-county-tax .calc-box-value {
+.dark .calc-county-tax .calc-box-value {
     color: #DDD6FE !important; /* Purple-200 for dark mode */
 }
 
-.dark .calc-anne-arundel-county-tax-rate {
+.dark .calc-county-tax-rate {
     background-color: #2E2457 !important; /* Anne Arundel County Tax Rate - Dark */
     border-color: #C084FC !important; /* Purple border for dark mode */
 }
 
-.dark .calc-anne-arundel-county-tax-rate .calc-box-label {
+.dark .calc-county-tax-rate .calc-box-label {
     color: #C084FC !important; /* Purple for dark mode */
 }
 
-.dark .calc-anne-arundel-county-tax-rate .calc-box-value {
+.dark .calc-county-tax-rate .calc-box-value {
     color: #DDD6FE !important; /* Purple-200 for dark mode */
 }
 
-.dark .calc-combined-maryland-tax {
+.dark .calc-combined-state-tax {
     background-color: #4A1845 !important; /* Combined Maryland Tax - Dark */
     border-color: #C084FC !important; /* Purple border for dark mode */
 }
 
-.dark .calc-combined-maryland-tax .calc-box-label {
+.dark .calc-combined-state-tax .calc-box-label {
     color: #C084FC !important; /* Purple for dark mode */
 }
 
-.dark .calc-combined-maryland-tax .calc-box-value {
+.dark .calc-combined-state-tax .calc-box-value {
     color: #DDD6FE !important; /* Purple-200 for dark mode */
 }
 
@@ -1266,6 +1414,10 @@ body {
 }
 
 /* Dark mode for calculation containers */
+.dark .calculation-section {
+    border-top-color: #475569; /* slate-600 */
+}
+
 .dark .calculation-container {
     background-color: #1e293b !important; /* slate-800 for dark mode */
     border-color: #1e40af !important; /* darker blue border for dark mode */
@@ -1276,25 +1428,30 @@ body {
     border-color: #4b5563 !important; /* slate-600 border for dark mode */
 }
 
-/* Dark mode for specific colored text elements */
-.dark p[style*="color: #2563eb"] {
-    color: #60a5fa !important; /* blue-400 for dark mode */
+.dark .calculation-title {
+    color: #60a5fa; /* blue-400 */
 }
 
-.dark p[style*="color: #16a34a"] {
-    color: #4ade80 !important; /* green-400 for dark mode */
+/* Colours that used to be inline style attributes (dark mode could only override those with attribute selectors).
+   They come after the .dark rules above so they win in both themes; the tokens switch under .dark. */
+.total-value.total-federal {
+    color: var(--text-federal);
 }
 
-.dark p[style*="color: #9333ea"] {
-    color: #a855f7 !important; /* purple-500 for dark mode */
+.total-value.total-state {
+    color: var(--text-state);
 }
 
-.dark p[style*="color: #059669"] {
-    color: #10b981 !important; /* emerald-500 for dark mode */
+.total-value.total-county {
+    color: var(--text-county);
 }
 
-.dark span[style*="color: #7c3aed"] {
-    color: #a855f7 !important; /* purple-500 for dark mode */
+.total-main-value.total-take-home {
+    color: var(--text-take-home);
+}
+
+.summary-value.county-value {
+    color: var(--text-county);
 }
 
 /* Color-coded concept boxes for visual consistency */
@@ -1377,11 +1534,6 @@ body {
     color: #10b981 !important; /* emerald-500 */
 }
 
-/* Hidden by default */
-.hidden {
-    display: none;
-}
-
 /* Responsive breakpoints */
 
 /* Small mobile devices (320px and up) */
@@ -1426,35 +1578,6 @@ body {
     .percentage-value {
         text-align: right;
     }
-    
-    /* Keep math equations on one line even on small screens */
-    .calc-step-mobile {
-        flex-direction: row;
-        flex-wrap: nowrap;
-        justify-content: center;
-        padding: 0.5rem;
-        gap: 0.25rem;
-    }
-    
-    .calc-box {
-        min-width: 70px;
-        max-width: 110px;
-        padding: 0.5rem 0.25rem;
-        font-size: 0.75rem;
-    }
-    
-    .calc-box-label {
-        font-size: 0.625rem;
-    }
-    
-    .calc-box-value {
-        font-size: 0.875rem;
-    }
-    
-    .calc-operator {
-        margin: 0 0.25rem;
-        font-size: 1.25rem;
-    }
 }
 
 /* Medium mobile devices (375px and up) */
@@ -1486,7 +1609,7 @@ body {
     .percentage-item {
         flex-direction: column;
         flex: 1;
-        min-width: 80px;
+        min-width: 5rem;
     }
     
     .percentage-label {
@@ -1499,10 +1622,22 @@ body {
     }
 }
 
-/* Large mobile devices (425px and up) */
-@media (min-width: 425px) {
+/* Total Tax Summary: the number of columns follows the width of the card */
+@container (min-width: 15rem) {
     .total-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container (min-width: 22rem) {
+    .total-main {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container (min-width: 30rem) {
+    .total-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
 
@@ -1527,56 +1662,69 @@ body {
     .tax-bar-container {
         height: 48px;
     }
+}
     
+/* Equations: boxes and operators side by side once the card is wide enough for three boxes */
+@container (min-width: 28rem) {
     .calc-step-mobile {
+        display: flex;
         justify-content: center;
+        gap: 0.25rem;
         padding: 1rem;
+        max-width: none;
+        min-height: 80px;
     }
     
     .calc-box {
-        min-width: 120px;
-        max-width: 150px;
+        flex: 1 1 auto;
+        min-width: 7.5rem;
+        max-width: 9.375rem;
         padding: 1rem;
     }
     
     .calc-operator {
+        flex: 0 0 auto;
         margin: 0 0.5rem;
-        font-size: 1.5rem;
-    }
-    
-    .total-main {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-/* Desktop (1024px and up) */
-@media (min-width: 1024px) {
-    .calc-step-mobile {
-        flex-wrap: nowrap;
     }
 }
 
 /* Focus states for accessibility */
 .slider:focus,
 .number-input:focus,
+.select-input:focus,
 .filing-status input[type="radio"]:focus + .filing-status-option,
 .theme-toggle:focus {
-    outline: 2px solid #4f46e5;
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
 }
 
-/* Ensure text is readable */
-@media (max-width: 374px) {
-    html {
-        font-size: 14px;
-    }
-    
+/* Ensure text is readable. em in a media query is the browser's default text size, so this
+   covers phones narrower than 375px and, with a larger text size, wider screens too. */
+@media (max-width: 23.4em) {
     .main-title {
         font-size: 1.5rem;
     }
     
     .subtitle {
         font-size: 0.875rem;
+    }
+
+    .main-content,
+    .total-summary {
+        padding: 1rem;
+    }
+
+    .calculation-container {
+        padding: 0.75rem;
+    }
+
+    .calc-step {
+        padding: 0.5rem;
+    }
+
+    .select-input {
+        padding: 0.75rem 0.25rem;
+        font-size: 0.75rem; /* long "County - rate" entries still fit */
     }
 }
 
@@ -1602,18 +1750,29 @@ body {
 
 /* Tab Navigation Styles */
 .tab-navigation {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); /* 2x2 on narrow screens so every tab stays fully visible */
     border-bottom: 2px solid #e2e8f0; /* slate-200 */
     margin-bottom: 2rem;
     background: transparent;
 }
 
+/* One row once there is room for four tabs */
+@container (min-width: 30rem) {
+    .tab-navigation {
+        display: flex;
+    }
+}
+
 .tab-button {
     flex: 1;
+    min-width: 0;
+    min-height: 44px; /* Touch target size */
+    overflow-wrap: anywhere;
     padding: 1rem 1.5rem;
     border: none;
     background: transparent;
-    color: #64748b; /* slate-500 */
+    color: #475569; /* slate-600 */
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
@@ -1623,7 +1782,7 @@ body {
 }
 
 .tab-button:hover {
-    color: #334155; /* slate-700 */
+    color: #1e293b; /* slate-800 - still a visible step up from the slate-600 resting colour */
     background: #f8fafc; /* slate-50 */
 }
 
@@ -1634,7 +1793,7 @@ body {
     font-weight: 600;
 }
 
-.tab-button:focus {
+.tab-button:focus-visible {
     outline: 2px solid #2563eb; /* blue-600 */
     outline-offset: -2px;
 }
@@ -1663,12 +1822,12 @@ body {
 }
 
 .dark .tab-button.active {
-    color: #60a5fa; /* blue-400 */
+    color: #93c5fd; /* blue-300 */
     border-bottom-color: #60a5fa; /* blue-400 */
     background: #334155; /* slate-700 */
 }
 
-.dark .tab-button:focus {
+.dark .tab-button:focus-visible {
     outline-color: #60a5fa; /* blue-400 */
 }
 
@@ -1703,17 +1862,32 @@ body {
     background: transparent;
 }
 
+/* Where the bracket tables scroll sideways, say so: the Tax Amount column is the last one */
+.scroll-hint {
+    display: none;
+    margin: 0 0 0.5rem;
+    padding: 0 1rem;
+    font-size: 0.8125rem;
+    color: #475569; /* slate-600 */
+}
+
+@media (max-width: 37.5rem) {
+    .scroll-hint {
+        display: block;
+    }
+}
+
 .bracket-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     line-height: 1.5;
     margin: 0;
 }
 
 .bracket-table th,
 .bracket-table td {
-    padding: 0.875rem 1rem;
+    padding: 0.5rem;
     text-align: right;
     border-bottom: 1px solid #e5e7eb; /* gray-200 */
     vertical-align: middle;
@@ -1723,7 +1897,7 @@ body {
     background-color: #f9fafb; /* gray-50 */
     font-weight: 600;
     color: #374151; /* gray-700 */
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     position: sticky;
@@ -1739,7 +1913,7 @@ body {
 
 .bracket-table th:last-child,
 .bracket-table td:last-child {
-    padding-right: 1.5rem;
+    padding-right: 1rem;
 }
 
 .bracket-table tbody tr {
@@ -1824,53 +1998,79 @@ body {
         padding: 1rem 1rem 0.5rem;
     }
     
-    .bracket-table {
-        font-size: 0.75rem;
-    }
-    
-    .bracket-table th,
-    .bracket-table td {
-        padding: 0.5rem 0.75rem;
-    }
-    
     .bracket-table th:first-child,
     .bracket-table td:first-child {
         padding-left: 1rem;
     }
-    
-    .bracket-table th:last-child,
-    .bracket-table td:last-child {
-        padding-right: 1rem;
-    }
-    
-    .bracket-table th {
-        font-size: 0.7rem;
-    }
 }
-
-/* Color coding for different tax types */
+    
+/* Color coding for different tax types (the tokens switch under .dark) */
 .bracket-table-container:has(#federal-bracket-table) h3 {
-    color: #2563eb; /* blue-600 */
+    color: var(--text-federal);
+}
+    
+.bracket-table-container:has(#state-bracket-table) h3 {
+    color: var(--text-state);
 }
 
-.bracket-table-container:has(#maryland-bracket-table) h3 {
-    color: #16a34a; /* green-600 */
+.bracket-table-container:has(#county-bracket-table) h3 {
+    color: var(--text-county);
 }
 
-.bracket-table-container:has(#anne-arundel-bracket-table) h3 {
-    color: #9333ea; /* purple-600 */
-}
+/* Forced colors (Windows High Contrast): the browser replaces background and border colours with system colours,
+   so every state that is only a colour fill needs another cue or an opt-out. :root outranks the .dark rules. */
+@media (forced-colors: active) {
+    /* Selected State / Filing Status option: Highlight fill plus a check mark */
+    :root .filing-status input[type="radio"]:checked + .filing-status-option {
+        forced-color-adjust: none;
+        background-color: Highlight;
+        color: HighlightText;
+        border-color: Highlight;
+    }
 
-.dark .bracket-table-container:has(#federal-bracket-table) h3 {
-    color: #60a5fa; /* blue-400 */
-}
+    :root .filing-status input[type="radio"]:checked + .filing-status-option::before {
+        content: "\2713";
+        content: "\2713" / "";
+        margin-right: 0.5em;
+    }
 
-.dark .bracket-table-container:has(#maryland-bracket-table) h3 {
-    color: #4ade80; /* green-400 */
-}
+    /* The selected option keeps its own colours, so give its focus ring a system colour as well */
+    :root .filing-status input[type="radio"]:checked:focus + .filing-status-option {
+        outline-color: CanvasText;
+    }
 
-.dark .bracket-table-container:has(#anne-arundel-bracket-table) h3 {
-    color: #c084fc; /* purple-400 */
+    /* Active tab: Highlight bar and underline; the other tabs lose the bar that forced colours would add */
+    :root .tab-button {
+        border-bottom-color: Canvas;
+    }
+
+    :root .tab-button.active {
+        border-bottom-color: Highlight;
+        text-decoration: underline;
+    }
+
+    /* The income bar and its legend are the only encoding of the four shares, so they keep their colours
+       and get a CanvasText edge (the inset outline takes no space and disappears on a 0% segment) */
+    .tax-bar {
+        forced-color-adjust: none;
+        outline: 1px solid CanvasText;
+        outline-offset: -1px;
+    }
+
+    .legend-color {
+        forced-color-adjust: none;
+        border: 1px solid CanvasText;
+    }
+
+    /* The slider track and the highlighted bracket rows are colour fills as well (the focus ring replaces the track edge) */
+    .slider {
+        outline: 1px solid ButtonText;
+        outline-offset: -1px;
+    }
+
+    .bracket-table tbody tr.active-bracket {
+        font-weight: 700;
+    }
 }
 
 /* Disclaimer Section */
@@ -1888,7 +2088,7 @@ body {
 
 .disclaimer-text {
     font-size: 0.875rem; /* text-sm */
-    color: #64748b; /* slate-500 */
+    color: #475569; /* slate-600 */
     line-height: 1.5;
     margin: 0;
 }

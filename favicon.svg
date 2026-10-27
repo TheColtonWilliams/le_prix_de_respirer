@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+    <!-- The income-breakdown bar: take-home, federal, state, county -->
+    <defs>
+        <clipPath id="bar"><rect x="3" y="10" width="26" height="12" rx="3"/></clipPath>
+    </defs>
+    <rect width="32" height="32" rx="7" fill="#f1f5f9"/>
+    <g clip-path="url(#bar)">
+        <rect x="3" y="10" width="13" height="12" fill="#10b981"/>
+        <rect x="16" y="10" width="7" height="12" fill="#3b82f6"/>
+        <rect x="23" y="10" width="3" height="12" fill="#eab308"/>
+        <rect x="26" y="10" width="3" height="12" fill="#a855f7"/>
+    </g>
+</svg>

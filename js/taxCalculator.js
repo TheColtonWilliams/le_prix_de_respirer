@@ -1,32 +1,94 @@
 /**
  * Tax Calculation Module
  * Handles all tax calculation logic including federal tax brackets and computations
+ *
+ * Rounding policy: every dollar amount is a whole dollar, as on a tax return. Inputs are rounded to
+ * whole dollars and each tax (a bracket-schedule total or a county's tax) is rounded once, so the
+ * figures shown for the parts always add up to the figures shown for the totals.
  */
+
+import { DEFAULT_STATE_CODE, getStateData, getCountyData, filingStatusKey } from './jurisdictionData.js';
+
+/**
+ * Clean up a dollar input: anything that is not a positive number counts as 0, fractions round to whole dollars
+ * @param {number} value - Raw amount
+ * @returns {number} Whole-dollar amount, never negative
+ */
+const toAmount = (value) => (Number.isFinite(value) && value > 0 ? Math.round(value) : 0);
+
+/**
+ * Express an amount as a percentage of a base amount
+ * @param {number} amount - Part
+ * @param {number} base - Whole
+ * @returns {number} Percentage, or 0 when there is no base
+ */
+const percentOf = (amount, base) => (base > 0 ? (amount / base) * 100 : 0);
+
+/**
+ * Round parts to whole dollars so that they add up to the rounded total (largest-remainder method)
+ * @param {number[]} parts - Unrounded amounts
+ * @returns {number[]} Whole-dollar amounts whose sum is the rounded sum of the parts
+ */
+const roundPartsToTotal = (parts) => {
+    const total = Math.round(parts.reduce((sum, part) => sum + part, 0));
+    const rounded = parts.map(Math.floor);
+    let shortfall = total - rounded.reduce((sum, part) => sum + part, 0);
+
+    // Hand the missing dollars to the parts with the biggest fractions (earlier parts win ties)
+    const byFraction = parts
+        .map((part, index) => [part - Math.floor(part), index])
+        .sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+    for (const [, index] of byFraction) {
+        if (shortfall <= 0) break;
+        rounded[index] += 1;
+        shortfall -= 1;
+    }
+
+    return rounded;
+};
+
+/**
+ * Take adjustments, deductions and credits off in order. Each can only use what is left, so AGI,
+ * taxable income and tax never go below zero, and the amounts reported as applied always add up.
+ * @param {number} income - Gross income (whole dollars)
+ * @param {number} adjustments - Adjustments to income entered
+ * @param {number} deductions - Deductions entered
+ * @param {number} credits - Tax credits entered
+ * @param {Function} taxOn - Function that returns the tax on a taxable income
+ * @returns {Object} Income, AGI, taxable income, taxes and the adjustments, deductions and credits actually applied
+ */
+const applyAllowances = (income, adjustments, deductions, credits, taxOn) => {
+    const adjustmentsApplied = Math.min(adjustments, income);
+    const agi = income - adjustmentsApplied;
+    const deductionsApplied = Math.min(deductions, agi);
+    const taxableIncome = agi - deductionsApplied;
+    const preCreditTax = taxOn(taxableIncome);
+    const creditsApplied = Math.min(credits, preCreditTax);
+
+    return {
+        income,
+        agi,
+        taxableIncome,
+        preCreditTax,
+        totalTax: preCreditTax - creditsApplied,
+        adjustmentsApplied,
+        deductionsApplied,
+        creditsApplied
+    };
+};
 
 export class TaxCalculator {
     constructor() {
-        // 2024 Federal tax brackets
+        // 2025 Federal tax brackets (IRS Rev. Proc. 2024-40; state and county brackets live in jurisdictionData.js)
         this.federalBrackets = {
-            single: [[11950, 0.10], [47150, 0.12], [100525, 0.22], [191950, 0.24], [243725, 0.32], [609350, 0.35], [Infinity, 0.37]],
+            single: [[11925, 0.10], [48475, 0.12], [103350, 0.22], [197300, 0.24], [250525, 0.32], [626350, 0.35], [Infinity, 0.37]],
             married: [[23850, 0.10], [96950, 0.12], [206700, 0.22], [394600, 0.24], [501050, 0.32], [751600, 0.35], [Infinity, 0.37]]
         };
         
-        // 2024 Maryland state tax brackets
-        this.marylandBrackets = {
-            single: [[1000, 0.02], [2000, 0.03], [3000, 0.04], [100000, 0.0475], [125000, 0.05], [150000, 0.0525], [250000, 0.055], [Infinity, 0.0575]],
-            married: [[1000, 0.02], [2000, 0.03], [3000, 0.04], [150000, 0.0475], [175000, 0.05], [225000, 0.0525], [300000, 0.055], [Infinity, 0.0575]]
-        };
-        
-        // 2024 Anne Arundel County tax brackets
-        this.anneArundelBrackets = {
-            single: [[50000, 0.027], [400000, 0.0281], [Infinity, 0.032]],
-            married: [[75000, 0.027], [480000, 0.0281], [Infinity, 0.032]]
-        };
-        
-        // 2024 standard deductions
+        // 2025 federal standard deductions (P.L. 119-21 raised the Rev. Proc. 2024-40 amounts)
         this.standardDeductions = {
-            single: 14600,
-            married: 29200
+            single: 15750,
+            married: 31500
         };
     }
 
@@ -34,35 +96,39 @@ export class TaxCalculator {
      * Calculate tax based on bracket system
      * @param {number} income - Taxable income
      * @param {Array} brackets - Tax bracket array
-     * @returns {number} Calculated tax amount
+     * @returns {number} Calculated tax amount in whole dollars
      */
     calculateBracketTax(income, brackets) {
-        if (income <= 0) return 0;
+        return this.calculateBracketBreakdown(income, brackets).totalTax;
+    }
+            
+    /**
+     * Calculate tax where the rate of the bracket the income falls in applies to ALL of the income
+     * (used by counties whose graduated rates are not marginal, e.g. Frederick County, MD)
+     * @param {number} income - Taxable income
+     * @param {Array} brackets - Tax bracket array
+     * @returns {number} Calculated tax amount in whole dollars
+     */
+    calculateWholeIncomeTax(income, brackets) {
+        if (!(income > 0)) return 0; // also covers NaN/undefined, like calculateBracketTax
+            
+        const [, rate] = brackets.find(([bracketLimit]) => income <= bracketLimit);
+        return Math.round(income * rate);
+    }
         
-        let totalTax = 0;
-        let previousLimit = 0;
-
-        for (const bracket of brackets) {
-            const [bracketLimit, rate] = bracket;
-            
-            if (income <= previousLimit) {
-                break; // Income is below this bracket
-            }
-            
-            const taxableInThisBracket = Math.min(income, bracketLimit) - previousLimit;
-            
-            if (taxableInThisBracket > 0) {
-                totalTax += taxableInThisBracket * rate;
-            }
-            
-            if (income <= bracketLimit) {
-                break; // We've calculated all applicable brackets
-            }
-            
-            previousLimit = bracketLimit;
-        }
-        
-        return Math.round(totalTax * 100) / 100; // Round to nearest cent
+    /**
+     * Calculate a county's local income tax using the method that county uses
+     * @param {number} income - Taxable income
+     * @param {string} stateCode - State code (e.g. 'MD', 'VA')
+     * @param {string} countyCode - County code; undefined means the state's default county
+     * @param {number} filingStatus - 1 for single, 2 for married
+     * @returns {number} Calculated tax amount in whole dollars
+     */
+    calculateCountyTax(income, stateCode, countyCode, filingStatus) {
+        const brackets = this.getCountyBrackets(stateCode, countyCode, filingStatus);
+        return getCountyData(stateCode, countyCode).wholeIncome
+            ? this.calculateWholeIncomeTax(income, brackets)
+            : this.calculateBracketTax(income, brackets);
     }
 
     /**
@@ -71,25 +137,28 @@ export class TaxCalculator {
      * @returns {Array} Tax brackets array
      */
     getFederalBrackets(filingStatus) {
-        return filingStatus === 1 ? this.federalBrackets.single : this.federalBrackets.married;
+        return this.federalBrackets[filingStatusKey(filingStatus)];
     }
 
     /**
-     * Get Maryland state tax brackets for filing status
+     * Get state income tax brackets for filing status
+     * @param {string} stateCode - State code (e.g. 'MD', 'VA')
      * @param {number} filingStatus - 1 for single, 2 for married
      * @returns {Array} Tax brackets array
      */
-    getMarylandBrackets(filingStatus) {
-        return filingStatus === 1 ? this.marylandBrackets.single : this.marylandBrackets.married;
+    getStateBrackets(stateCode, filingStatus) {
+        return getStateData(stateCode).brackets[filingStatusKey(filingStatus)];
     }
 
     /**
-     * Get Anne Arundel County tax brackets for filing status
+     * Get county (local) income tax brackets for filing status
+     * @param {string} stateCode - State code (e.g. 'MD', 'VA')
+     * @param {string} countyCode - County code; undefined means the state's default county
      * @param {number} filingStatus - 1 for single, 2 for married
      * @returns {Array} Tax brackets array
      */
-    getAnneArundelBrackets(filingStatus) {
-        return filingStatus === 1 ? this.anneArundelBrackets.single : this.anneArundelBrackets.married;
+    getCountyBrackets(stateCode, countyCode, filingStatus) {
+        return getCountyData(stateCode, countyCode).brackets[filingStatusKey(filingStatus)];
     }
 
     /**
@@ -98,7 +167,17 @@ export class TaxCalculator {
      * @returns {number} Standard deduction amount
      */
     getStandardDeduction(filingStatus) {
-        return filingStatus === 1 ? this.standardDeductions.single : this.standardDeductions.married;
+        return this.standardDeductions[filingStatusKey(filingStatus)];
+    }
+
+    /**
+     * Get a state's own standard deduction (states do not use the federal amount)
+     * @param {string} stateCode - State code (e.g. 'MD', 'VA')
+     * @param {number} filingStatus - 1 for single, 2 for married
+     * @returns {number} Standard deduction amount
+     */
+    getStateStandardDeduction(stateCode, filingStatus) {
+        return getStateData(stateCode).standardDeduction[filingStatusKey(filingStatus)];
     }
 
     /**
@@ -108,41 +187,29 @@ export class TaxCalculator {
      */
     calculateTaxes(params) {
         const { income, adjustments, deductions, credits, filingStatus } = params;
+        const brackets = this.getFederalBrackets(filingStatus);
         
-        // Step 1: Calculate AGI
-        const agi = Math.max(0, income - adjustments);
-        
-        // Step 2: Calculate taxable income
-        const taxableIncome = Math.max(0, agi - deductions);
-        
-        // Step 3: Calculate pre-credit tax
-        const preCreditTax = this.calculateBracketTax(taxableIncome, this.getFederalBrackets(filingStatus));
-        
-        // Step 4: Apply credits
-        const totalTax = Math.max(0, preCreditTax - credits);
-        
-        // Step 5: Calculate take-home pay
-        const postTaxIncome = income - totalTax;
-        
-        // Calculate effective rates
-        const taxableEffectiveRate = taxableIncome > 0 ? (preCreditTax / taxableIncome) * 100 : 0;
-        const grossEffectiveRate = income > 0 ? (totalTax / income) * 100 : 0;
+        const result = applyAllowances(
+            toAmount(income), toAmount(adjustments), toAmount(deductions), toAmount(credits),
+            (taxableIncome) => this.calculateBracketTax(taxableIncome, brackets)
+        );
         
         return {
-            agi,
-            taxableIncome,
-            preCreditTax,
-            totalTax,
-            postTaxIncome,
-            taxableEffectiveRate,
-            grossEffectiveRate
+            ...result,
+            postTaxIncome: result.income - result.totalTax,
+            taxableEffectiveRate: percentOf(result.preCreditTax, result.taxableIncome),
+            grossEffectiveRate: percentOf(result.totalTax, result.income)
         };
     }
 
     /**
      * Calculate complete tax scenario with state and county taxes
      * @param {Object} params - Tax calculation parameters including state inputs
-     * @returns {Object} Complete tax calculation results with federal, state, and county breakdowns
+     * @param {string} [params.stateCode] - State code ('MD' or 'VA'); defaults to Maryland
+     * @param {string} [params.countyCode] - County code; defaults to the state's default county
+     * @returns {Object} Complete tax calculation results with federal, state, and county breakdowns.
+     *     federal and state include the income, adjustments, deductions and credits actually applied;
+     *     totals.shares express each tax and the take-home pay as a percentage of totals.primaryIncome
      */
     calculateAllTaxes(params) {
         const { 
@@ -151,59 +218,56 @@ export class TaxCalculator {
             // State parameters
             stateIncome, stateAdjustments, stateDeductions, stateCredits,
             // Common parameters
-            filingStatus 
+            filingStatus,
+            // Jurisdiction (optional - defaults keep the original Maryland / Anne Arundel behavior)
+            stateCode = DEFAULT_STATE_CODE, countyCode
         } = params;
         
-        // Federal calculations
-        const federalAgi = Math.max(0, federalIncome - federalAdjustments);
-        const federalTaxableIncome = Math.max(0, federalAgi - federalDeductions);
-        const federalPreCreditTax = this.calculateBracketTax(federalTaxableIncome, this.getFederalBrackets(filingStatus));
-        const federalTax = Math.max(0, federalPreCreditTax - federalCredits);
+        const federalBrackets = this.getFederalBrackets(filingStatus);
+        const stateBrackets = this.getStateBrackets(stateCode, filingStatus);
         
-        // State calculations (Maryland)
-        const stateAgi = Math.max(0, stateIncome - stateAdjustments);
-        const stateTaxableIncome = Math.max(0, stateAgi - stateDeductions);
-        const statePreCreditTax = this.calculateBracketTax(stateTaxableIncome, this.getMarylandBrackets(filingStatus));
-        const stateTax = Math.max(0, statePreCreditTax - stateCredits);
+        // Federal and state calculations
+        const federal = applyAllowances(
+            toAmount(federalIncome), toAmount(federalAdjustments), toAmount(federalDeductions), toAmount(federalCredits),
+            (taxableIncome) => this.calculateBracketTax(taxableIncome, federalBrackets)
+        );
+        const state = applyAllowances(
+            toAmount(stateIncome), toAmount(stateAdjustments), toAmount(stateDeductions), toAmount(stateCredits),
+            (taxableIncome) => this.calculateBracketTax(taxableIncome, stateBrackets)
+        );
         
-        // County calculations (Anne Arundel - based on state taxable income)
-        const countyTax = this.calculateBracketTax(stateTaxableIncome, this.getAnneArundelBrackets(filingStatus));
+        // County calculations (based on state taxable income)
+        const countyTax = this.calculateCountyTax(state.taxableIncome, stateCode, countyCode, filingStatus);
         
         // Total calculations
-        const totalTax = federalTax + stateTax + countyTax;
-        const primaryIncome = Math.max(federalIncome, stateIncome);
+        const totalTax = federal.totalTax + state.totalTax + countyTax;
+        const primaryIncome = Math.max(federal.income, state.income);
         const postTaxIncome = primaryIncome - totalTax;
-        
-        // Effective rates
-        const federalEffectiveRate = federalIncome > 0 ? (federalTax / federalIncome) * 100 : 0;
-        const stateEffectiveRate = stateIncome > 0 ? (stateTax / stateIncome) * 100 : 0;
-        const countyEffectiveRate = stateIncome > 0 ? (countyTax / stateIncome) * 100 : 0;
-        const totalEffectiveRate = primaryIncome > 0 ? (totalTax / primaryIncome) * 100 : 0;
         
         return {
             federal: {
-                agi: federalAgi,
-                taxableIncome: federalTaxableIncome,
-                preCreditTax: federalPreCreditTax,
-                totalTax: federalTax,
-                effectiveRate: federalEffectiveRate
+                ...federal,
+                effectiveRate: percentOf(federal.totalTax, federal.income)
             },
             state: {
-                agi: stateAgi,
-                taxableIncome: stateTaxableIncome,
-                preCreditTax: statePreCreditTax,
-                totalTax: stateTax,
-                effectiveRate: stateEffectiveRate
+                ...state,
+                effectiveRate: percentOf(state.totalTax, state.income)
             },
             county: {
                 totalTax: countyTax,
-                effectiveRate: countyEffectiveRate
+                effectiveRate: percentOf(countyTax, state.income)
             },
             totals: {
                 totalTax,
                 postTaxIncome,
-                effectiveRate: totalEffectiveRate,
-                primaryIncome
+                effectiveRate: percentOf(totalTax, primaryIncome),
+                primaryIncome,
+                shares: {
+                    federal: percentOf(federal.totalTax, primaryIncome),
+                    state: percentOf(state.totalTax, primaryIncome),
+                    county: percentOf(countyTax, primaryIncome),
+                    takeHome: percentOf(postTaxIncome, primaryIncome)
+                }
             }
         };
     }
@@ -225,12 +289,15 @@ export class TaxCalculator {
     }
 
     /**
-     * Calculate Maryland baseline scenario (standard deduction, no adjustments/credits)
+     * Calculate state baseline scenario (the state's own standard deduction, no adjustments/credits)
      * @param {number} income - Gross income
      * @param {number} filingStatus - Filing status
-     * @returns {Object} Maryland baseline calculation results
+     * @param {string} [stateCode] - State code ('MD' or 'VA'); defaults to Maryland
+     * @param {string} [countyCode] - County code; defaults to the state's default county
+     * @returns {Object} State baseline calculation results (includes the standard deduction and how much of it was used)
      */
-    calculateMarylandBaseline(income, filingStatus) {
+    calculateStateBaseline(income, filingStatus, stateCode = DEFAULT_STATE_CODE, countyCode) {
+        const standardDeduction = this.getStateStandardDeduction(stateCode, filingStatus);
         const inputs = {
             federalIncome: 0,
             federalAdjustments: 0,
@@ -238,168 +305,152 @@ export class TaxCalculator {
             federalCredits: 0,
             stateIncome: income,
             stateAdjustments: 0,
-            stateDeductions: this.getStandardDeduction(filingStatus),
+            stateDeductions: standardDeduction,
             stateCredits: 0,
-            filingStatus
+            filingStatus,
+            stateCode,
+            countyCode
         };
         
         const fullCalculation = this.calculateAllTaxes(inputs);
+        const combinedTax = fullCalculation.state.totalTax + fullCalculation.county.totalTax;
         
         // Return only the state and county portions
         return {
+            standardDeduction,
+            deductionsApplied: fullCalculation.state.deductionsApplied,
             state: fullCalculation.state,
             county: fullCalculation.county,
             combined: {
-                totalTax: fullCalculation.state.totalTax + fullCalculation.county.totalTax,
-                postTaxIncome: income - (fullCalculation.state.totalTax + fullCalculation.county.totalTax),
-                effectiveRate: income > 0 ? ((fullCalculation.state.totalTax + fullCalculation.county.totalTax) / income) * 100 : 0
+                totalTax: combinedTax,
+                postTaxIncome: fullCalculation.state.income - combinedTax,
+                effectiveRate: percentOf(combinedTax, fullCalculation.state.income)
             }
         };
     }
 
     /**
-     * Calculate detailed tax bracket breakdown for visual display
+     * Calculate detailed tax bracket breakdown for visual display. Every bracket gets a row (all
+     * zeros when there is no income); the per-bracket taxes are whole dollars that add up to totalTax.
      * @param {number} income - Taxable income
      * @param {Array} brackets - Tax bracket array
      * @param {string} jurisdiction - Name of the tax jurisdiction
      * @returns {Object} Detailed breakdown with bracket-by-bracket information
      */
     calculateBracketBreakdown(income, brackets, jurisdiction) {
-        if (income <= 0) {
-            return {
-                jurisdiction,
-                totalTax: 0,
-                totalIncome: 0,
-                brackets: []
-            };
-        }
-        
-        let totalTax = 0;
+        const taxableIncome = Number.isFinite(income) && income > 0 ? income : 0;
         let previousLimit = 0;
-        let remainingIncome = income;
-        const bracketDetails = [];
-
-        for (let i = 0; i < brackets.length; i++) {
-            const [bracketLimit, rate] = brackets[i];
+        let remainingIncome = taxableIncome;
             
-            if (remainingIncome <= 0) {
-                // No remaining income for this bracket
-                bracketDetails.push({
-                    lowerLimit: previousLimit,
-                    upperLimit: bracketLimit === Infinity ? 'No Limit' : bracketLimit,
-                    rate: rate * 100,
-                    incomeRemaining: 0,
-                    taxIncomeInBracket: 0,
-                    taxAmount: 0
-                });
-                continue;
-            }
-            
-            const taxableInThisBracket = Math.min(remainingIncome, bracketLimit - previousLimit);
-            const taxForThisBracket = taxableInThisBracket * rate;
-            
-            bracketDetails.push({
+        const bracketDetails = brackets.map(([bracketLimit, rate]) => {
+            const taxIncomeInBracket = Math.min(remainingIncome, bracketLimit - previousLimit);
+            const bracketDetail = {
                 lowerLimit: previousLimit,
                 upperLimit: bracketLimit === Infinity ? 'No Limit' : bracketLimit,
                 rate: rate * 100,
                 incomeRemaining: remainingIncome,
-                taxIncomeInBracket: taxableInThisBracket,
-                taxAmount: taxForThisBracket
-            });
-            
-            totalTax += taxForThisBracket;
-            remainingIncome -= taxableInThisBracket;
-            
-            if (income <= bracketLimit) {
-                // Fill remaining brackets with zeros
-                for (let j = i + 1; j < brackets.length; j++) {
-                    const [nextLimit, nextRate] = brackets[j];
-                    bracketDetails.push({
-                        lowerLimit: j === 0 ? 0 : brackets[j-1][0],
-                        upperLimit: nextLimit === Infinity ? 'No Limit' : nextLimit,
-                        rate: nextRate * 100,
-                        incomeRemaining: 0,
-                        taxIncomeInBracket: 0,
-                        taxAmount: 0
-                    });
-                }
-                break;
-            }
-            
+                taxIncomeInBracket,
+                taxAmount: taxIncomeInBracket * rate
+            };
+
+            remainingIncome -= taxIncomeInBracket;
             previousLimit = bracketLimit;
-        }
+            return bracketDetail;
+        });
+            
+        const taxAmounts = roundPartsToTotal(bracketDetails.map(bracketDetail => bracketDetail.taxAmount));
+        bracketDetails.forEach((bracketDetail, index) => {
+            bracketDetail.taxAmount = taxAmounts[index];
+        });
+
+        return {
+            jurisdiction,
+            totalTax: taxAmounts.reduce((sum, taxAmount) => sum + taxAmount, 0),
+            totalIncome: taxableIncome,
+            brackets: bracketDetails
+        };
+    }
+            
+    /**
+     * Calculate detailed bracket breakdown where the rate of the bracket the income falls in
+     * applies to ALL of the income (same result shape as calculateBracketBreakdown)
+     * @param {number} income - Taxable income
+     * @param {Array} brackets - Tax bracket array
+     * @param {string} jurisdiction - Name of the tax jurisdiction
+     * @returns {Object} Detailed breakdown with bracket-by-bracket information
+     */
+    calculateWholeIncomeBreakdown(income, brackets, jurisdiction) {
+        const taxableIncome = Number.isFinite(income) && income > 0 ? income : 0;
+        let previousLimit = 0;
+        let totalTax = 0;
+
+        const bracketDetails = brackets.map(([bracketLimit, rate]) => {
+            const lowerLimit = previousLimit;
+            previousLimit = bracketLimit;
+
+            // Only the bracket the income falls in has any tax, and it taxes the whole income
+            const applies = taxableIncome > lowerLimit && taxableIncome <= bracketLimit;
+            const taxAmount = applies ? Math.round(taxableIncome * rate) : 0;
+            totalTax += taxAmount;
+
+            return {
+                lowerLimit,
+                upperLimit: bracketLimit === Infinity ? 'No Limit' : bracketLimit,
+                rate: rate * 100,
+                incomeRemaining: applies ? taxableIncome : 0,
+                taxIncomeInBracket: applies ? taxableIncome : 0,
+                taxAmount
+            };
+        });
         
         return {
             jurisdiction,
-            totalTax: Math.round(totalTax * 100) / 100,
-            totalIncome: income,
+            totalTax,
+            totalIncome: taxableIncome,
             brackets: bracketDetails
         };
     }
 
     /**
-     * Get complete tax breakdown for all jurisdictions
+     * Get complete tax breakdown for all jurisdictions. Totals are before credits.
      * @param {Object} inputs - Tax calculation inputs
      * @returns {Object} Complete breakdown for federal, state, and county taxes
      */
     getCompleteTaxBreakdown(inputs) {
-        const {
-            federalIncome,
-            federalAdjustments,
-            federalDeductions,
-            federalCredits,
-            stateIncome,
-            stateAdjustments,
-            stateDeductions,
-            stateCredits,
-            filingStatus
-        } = inputs;
+        const { stateCode = DEFAULT_STATE_CODE, countyCode, filingStatus } = inputs;
         
-        // Calculate taxable incomes
-        const federalAGI = Math.max(0, federalIncome - federalAdjustments);
-        const federalTaxableIncome = Math.max(0, federalAGI - federalDeductions);
-        
-        const stateAGI = Math.max(0, stateIncome - stateAdjustments);
-        const stateTaxableIncome = Math.max(0, stateAGI - stateDeductions);
+        // Taxable incomes come from the same calculation the rest of the app uses
+        const { federal, state } = this.calculateAllTaxes(inputs);
         
         // Get brackets
         const federalBrackets = this.getFederalBrackets(filingStatus);
-        const marylandBrackets = this.getMarylandBrackets(filingStatus);
-        const anneArundelBrackets = this.getAnneArundelBrackets(filingStatus);
+        const stateBrackets = this.getStateBrackets(stateCode, filingStatus);
+        const countyBrackets = this.getCountyBrackets(stateCode, countyCode, filingStatus);
+        const stateName = getStateData(stateCode).name;
+        const county = getCountyData(stateCode, countyCode);
         
         // Calculate breakdowns
         const federalBreakdown = this.calculateBracketBreakdown(
-            federalTaxableIncome, 
+            federal.taxableIncome,
             federalBrackets, 
             'Federal Tax Bracket Breakdown'
         );
         
-        const marylandBreakdown = this.calculateBracketBreakdown(
-            stateTaxableIncome, 
-            marylandBrackets, 
-            'Maryland Tax Bracket Breakdown'
+        const stateBreakdown = this.calculateBracketBreakdown(
+            state.taxableIncome,
+            stateBrackets,
+            `${stateName} Tax Bracket Breakdown`
         );
         
-        const anneArundelBreakdown = this.calculateBracketBreakdown(
-            stateTaxableIncome, 
-            anneArundelBrackets, 
-            'Anne Arundel Tax Bracket Breakdown'
-        );
+        const countyJurisdiction = `${county.name} Tax Bracket Breakdown`;
+        const countyBreakdown = county.wholeIncome
+            ? this.calculateWholeIncomeBreakdown(state.taxableIncome, countyBrackets, countyJurisdiction)
+            : this.calculateBracketBreakdown(state.taxableIncome, countyBrackets, countyJurisdiction);
         
         return {
             federal: federalBreakdown,
-            maryland: marylandBreakdown,
-            anneArundel: anneArundelBreakdown,
-            summary: {
-                federalTaxableIncome,
-                stateTaxableIncome,
-                totalFederalTax: Math.max(0, federalBreakdown.totalTax - federalCredits),
-                totalStateTax: Math.max(0, marylandBreakdown.totalTax - stateCredits),
-                totalCountyTax: anneArundelBreakdown.totalTax,
-                combinedTax: Math.max(0, federalBreakdown.totalTax - federalCredits) + 
-                            Math.max(0, marylandBreakdown.totalTax - stateCredits) + 
-                            anneArundelBreakdown.totalTax
-            }
+            state: stateBreakdown,
+            county: countyBreakdown
         };
     }
 }
